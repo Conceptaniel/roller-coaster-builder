@@ -130,38 +130,93 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
       }
       
       const loopRadius = 8;
-      const numLoopPoints = 8;
-      const loopPoints: TrackPoint[] = [];
+      const numLoopPoints = 12;
+      const allPoints: TrackPoint[] = [];
       
+      // Lead-in: 2 points that gradually rise and curve upward
+      const leadInDist = 4;
+      allPoints.push({
+        id: `point-${++pointCounter}`,
+        position: new THREE.Vector3(
+          pos.x + direction.x * leadInDist,
+          pos.y + 1,
+          pos.z + direction.z * leadInDist
+        ),
+        tilt: 0
+      });
+      allPoints.push({
+        id: `point-${++pointCounter}`,
+        position: new THREE.Vector3(
+          pos.x + direction.x * (leadInDist + 3),
+          pos.y + 3,
+          pos.z + direction.z * (leadInDist + 3)
+        ),
+        tilt: 0
+      });
+      
+      // Loop center is offset forward from the lead-in
+      const loopCenterOffset = leadInDist + 3;
+      const loopCenterX = pos.x + direction.x * loopCenterOffset;
+      const loopCenterZ = pos.z + direction.z * loopCenterOffset;
+      const loopBaseY = pos.y + loopRadius;
+      
+      // Main loop points - start from bottom going up
       for (let i = 1; i <= numLoopPoints; i++) {
+        // Start at bottom (angle 0), go counter-clockwise in the vertical plane
         const angle = (i / numLoopPoints) * Math.PI * 2;
         
+        // Forward offset: sin creates the forward/backward motion
         const forwardOffset = Math.sin(angle) * loopRadius;
-        const heightOffset = (1 - Math.cos(angle)) * loopRadius;
+        // Height: cos creates the up/down motion, centered at loopBaseY
+        const heightOffset = -Math.cos(angle) * loopRadius;
         
         const newPos = new THREE.Vector3(
-          pos.x + direction.x * forwardOffset,
-          pos.y + heightOffset,
-          pos.z + direction.z * forwardOffset
+          loopCenterX + direction.x * forwardOffset,
+          loopBaseY + heightOffset,
+          loopCenterZ + direction.z * forwardOffset
         );
         
+        // Tilt slightly inward at the top of the loop
         let tilt = 0;
-        if (i <= numLoopPoints / 2) {
-          tilt = (i / (numLoopPoints / 2)) * -10;
-        } else {
-          tilt = ((numLoopPoints - i) / (numLoopPoints / 2)) * -10;
+        const normalizedAngle = angle / (Math.PI * 2);
+        if (normalizedAngle > 0.25 && normalizedAngle < 0.75) {
+          // Top half of loop - tilt inward
+          const topProgress = (normalizedAngle - 0.25) / 0.5;
+          tilt = -Math.sin(topProgress * Math.PI) * 5;
         }
         
-        loopPoints.push({
+        allPoints.push({
           id: `point-${++pointCounter}`,
           position: newPos,
           tilt
         });
       }
       
+      // Lead-out: 2 points that gradually descend and straighten
+      const exitX = loopCenterX + direction.x * loopRadius;
+      const exitZ = loopCenterZ + direction.z * loopRadius;
+      allPoints.push({
+        id: `point-${++pointCounter}`,
+        position: new THREE.Vector3(
+          exitX + direction.x * 3,
+          pos.y + 3,
+          exitZ + direction.z * 3
+        ),
+        tilt: 0
+      });
+      allPoints.push({
+        id: `point-${++pointCounter}`,
+        position: new THREE.Vector3(
+          exitX + direction.x * 6,
+          pos.y + 1,
+          exitZ + direction.z * 6
+        ),
+        tilt: 0
+      });
+      
       const newTrackPoints = [
         ...state.trackPoints.slice(0, pointIndex + 1),
-        ...loopPoints,
+        ...allPoints,
         ...state.trackPoints.slice(pointIndex + 1)
       ];
       
