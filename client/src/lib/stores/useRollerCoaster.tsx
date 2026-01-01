@@ -130,38 +130,29 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
       }
       
       const loopRadius = 8;
-      const numPoints = 24;
-      const lateralShift = loopRadius * 2 + 4; // Lateral shift to prevent self-intersection
+      const numPoints = 20;
       const loopPoints: TrackPoint[] = [];
       
       // Compute right vector (perpendicular to forward in horizontal plane)
       const up = new THREE.Vector3(0, 1, 0);
       const right = new THREE.Vector3().crossVectors(forward, up).normalize();
       
-      // Loop center is one radius ahead of entry, one radius up
-      // Train goes on INSIDE of loop: up the far side, over top, down near side
-      // θ starts at -π/2 (bottom-back), goes to 3π/2 (bottom-front)
-      // forward = R·cos(θ): starts at 0, goes to +R (far), back to 0 (top), to -R (near), to 0
-      // vertical = R·(sin(θ)+1): starts at 0, goes to R, to 2R (top), to R, to 0
+      // Pure circular loop in forward-up plane:
+      // θ from 0 to 2π
+      // forward = sin(θ) * R: 0 → +R → 0 → -R → 0 (goes forward to far side, back to near)
+      // vertical = (1-cos(θ)) * R: 0 → R → 2R → R → 0 (up and over)
+      // Train travels on INSIDE of loop, up far side, over top, down near side
       
-      for (let i = 1; i <= numPoints; i++) {
+      for (let i = 1; i < numPoints; i++) {
         const t = i / numPoints;
-        const theta = -Math.PI / 2 + t * Math.PI * 2;
+        const theta = t * Math.PI * 2;
         
-        // Smoothstep for lateral shift distribution
-        const smoothT = t * t * (3 - 2 * t);
+        const forwardOffset = Math.sin(theta) * loopRadius;
+        const verticalOffset = (1 - Math.cos(theta)) * loopRadius;
         
-        // cos(θ) from θ=-π/2: 0 → 1 → 0 → -1 → 0 (forward to far side, back to near)
-        const forwardOffset = Math.cos(theta) * loopRadius;
-        // sin(θ)+1 from θ=-π/2: 0 → 1 → 2 → 1 → 0 (up and over)
-        const verticalOffset = (Math.sin(theta) + 1) * loopRadius;
-        
-        // Progressive lateral shift to separate ascending/descending
-        const progressiveLateral = smoothT * lateralShift;
-        
-        const x = entryPos.x + forward.x * forwardOffset + right.x * progressiveLateral;
+        const x = entryPos.x + forward.x * forwardOffset;
         const y = entryPos.y + verticalOffset;
-        const z = entryPos.z + forward.z * forwardOffset + right.z * progressiveLateral;
+        const z = entryPos.z + forward.z * forwardOffset;
         
         loopPoints.push({
           id: `point-${++pointCounter}`,
@@ -170,20 +161,35 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         });
       }
       
-      // Shift all downstream points laterally to match loop exit
+      // Separation distance for downstream track (lateral shift to prevent collision)
+      const separationDist = loopRadius * 2 + 4;
+      
+      // Add transition point to smoothly connect loop exit to shifted downstream
+      const transitionPoint: TrackPoint = {
+        id: `point-${++pointCounter}`,
+        position: new THREE.Vector3(
+          entryPos.x + right.x * separationDist,
+          entryPos.y,
+          entryPos.z + right.z * separationDist
+        ),
+        tilt: 0
+      };
+      
+      // Shift all downstream points laterally
       const shiftedDownstreamPoints = state.trackPoints.slice(pointIndex + 1).map(p => ({
         ...p,
         position: new THREE.Vector3(
-          p.position.x + right.x * lateralShift,
+          p.position.x + right.x * separationDist,
           p.position.y,
-          p.position.z + right.z * lateralShift
+          p.position.z + right.z * separationDist
         )
       }));
       
-      // Combine: original up to entry + loop + shifted remainder
+      // Combine: original up to entry + loop + transition + shifted remainder
       const newTrackPoints = [
         ...state.trackPoints.slice(0, pointIndex + 1),
         ...loopPoints,
+        transitionPoint,
         ...shiftedDownstreamPoints
       ];
       
