@@ -194,35 +194,59 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         .add(forward.clone().multiplyScalar(forwardSeparation))
         .add(right.clone().multiplyScalar(exitSeparation));
       
-      // Smooth transition from loop exit - match the seamless entry style
+      // Hermite-style transition: respect both loop exit direction and legacy track direction
       const transitionPoints: TrackPoint[] = [];
       
       if (nextPoint) {
         const nextPos = nextPoint.position.clone();
         
-        // Exit direction from loop: at θ=2π, tangent is cos(2π)*forward + sin(2π)*up = forward
-        // So we continue in the forward direction initially
-        const exitDir = forward.clone();
+        // Loop exit tangent: at θ=2π, tangent = forward
+        const exitTangent = forward.clone();
         
-        // Direction toward next point
-        const toNext = nextPos.clone().sub(loopExit).normalize();
+        // Legacy track incoming direction (from nextPoint toward the point after)
+        // If there's a point after nextPoint, use that to compute legacy direction
+        const nextNextPoint = state.trackPoints[pointIndex + 2];
+        let legacyTangent: THREE.Vector3;
         
-        // Add transition points that smoothly curve from exit direction to next point
-        // Point 1: Continue in loop's exit direction
-        const t1 = loopExit.clone().add(exitDir.clone().multiplyScalar(4));
+        if (nextNextPoint) {
+          // Direction the legacy track is heading
+          legacyTangent = nextNextPoint.position.clone().sub(nextPos).normalize();
+        } else {
+          // No point after, just use direction from loop exit to next point
+          legacyTangent = nextPos.clone().sub(loopExit).normalize();
+        }
+        
+        // Cubic Hermite interpolation between loopExit and nextPos
+        // P(t) = (2t³ - 3t² + 1)P0 + (t³ - 2t² + t)T0 + (-2t³ + 3t²)P1 + (t³ - t²)T1
+        const distance = loopExit.distanceTo(nextPos);
+        const tangentScale = distance * 0.5; // Scale tangents by half the distance
+        
+        const hermite = (t: number): THREE.Vector3 => {
+          const t2 = t * t;
+          const t3 = t2 * t;
+          
+          const h00 = 2*t3 - 3*t2 + 1;
+          const h10 = t3 - 2*t2 + t;
+          const h01 = -2*t3 + 3*t2;
+          const h11 = t3 - t2;
+          
+          return new THREE.Vector3()
+            .addScaledVector(loopExit, h00)
+            .addScaledVector(exitTangent, h10 * tangentScale)
+            .addScaledVector(nextPos, h01)
+            .addScaledVector(legacyTangent, h11 * tangentScale);
+        };
+        
+        // Sample 2 points along the Hermite curve
         transitionPoints.push({
           id: `point-${++pointCounter}`,
-          position: t1,
+          position: hermite(0.33),
           tilt: 0
         });
         
-        // Point 2: Blend toward next point direction
-        const t2 = t1.clone().add(
-          exitDir.clone().lerp(toNext, 0.5).normalize().multiplyScalar(4)
-        );
         transitionPoints.push({
           id: `point-${++pointCounter}`,
-          position: t2,
+          position: hermite(0.66),
           tilt: 0
         });
       }
