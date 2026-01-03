@@ -24,15 +24,15 @@ function interpolateTilt(trackPoints: { tilt: number }[], t: number, isLooped: b
 export function Track() {
   const { trackPoints, isLooped, showWoodSupports, isNightMode } = useRollerCoaster();
   
-  const { curve, railData, woodSupports, trackLights } = useMemo(() => {
+  const { curve, railData, woodSupports, trackLights, loopCables } = useMemo(() => {
     if (trackPoints.length < 2) {
-      return { curve: null, railData: [], woodSupports: [], trackLights: [] };
+      return { curve: null, railData: [], woodSupports: [], trackLights: [], loopCables: [] };
     }
     
     const points = trackPoints.map((p) => p.position.clone());
     const curve = new THREE.CatmullRomCurve3(points, isLooped, "catmullrom", 0.5);
     
-    const railData: { point: THREE.Vector3; tilt: number; tangent: THREE.Vector3; normal: THREE.Vector3 }[] = [];
+    const railData: { point: THREE.Vector3; tilt: number; tangent: THREE.Vector3; normal: THREE.Vector3; isLoop: boolean; loopTheta?: number }[] = [];
     const numSamples = Math.max(trackPoints.length * 20, 100);
     
     // Helper to get loop metadata at parameter t
@@ -108,7 +108,7 @@ export function Track() {
         
         // OVERRIDE the spline tangent with our reference tangent
         // This is critical - the sleeper/tie rotation uses tangent, and helical tangent causes twist
-        railData.push({ point, tilt, tangent: refTangent, normal });
+        railData.push({ point, tilt, tangent: refTangent, normal, isLoop: true, loopTheta: theta });
         
         prevUp.copy(up);
         prevTangent.copy(refTangent);
@@ -151,21 +151,44 @@ export function Track() {
         normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
       }
       
-      railData.push({ point, tilt, tangent, normal });
+      railData.push({ point, tilt, tangent, normal, isLoop: false });
     }
     
     const woodSupports: { pos: THREE.Vector3; tangent: THREE.Vector3; height: number; tilt: number }[] = [];
     const supportInterval = 3;
     
+    // Only add wood supports for non-loop sections
     for (let i = 0; i < railData.length; i += supportInterval) {
-      const { point, tangent, tilt } = railData[i];
-      if (point.y > 1) {
+      const { point, tangent, tilt, isLoop } = railData[i];
+      if (point.y > 1 && !isLoop) {
         woodSupports.push({ 
           pos: point.clone(), 
           tangent: tangent.clone(),
           height: point.y,
           tilt
         });
+      }
+    }
+    
+    // Add cables for loop sections - at specific theta angles (4 cables total)
+    const loopCables: { trackPos: THREE.Vector3; groundPos: THREE.Vector3 }[] = [];
+    const cableAngles = [Math.PI * 0.25, Math.PI * 0.5, Math.PI * 0.75, Math.PI * 1.25]; // 45°, 90°, 135°, 225°
+    
+    for (let i = 0; i < railData.length; i++) {
+      const data = railData[i];
+      if (data.isLoop && data.loopTheta !== undefined) {
+        // Check if this sample is close to one of our cable angles
+        for (const targetAngle of cableAngles) {
+          if (Math.abs(data.loopTheta - targetAngle) < 0.15) {
+            // Ground anchor directly below track point
+            const groundPos = new THREE.Vector3(data.point.x, 0, data.point.z);
+            loopCables.push({
+              trackPos: data.point.clone(),
+              groundPos
+            });
+            break; // Only one cable per sample
+          }
+        }
       }
     }
     
@@ -178,7 +201,7 @@ export function Track() {
       trackLights.push({ pos: point.clone(), normal: normal.clone() });
     }
     
-    return { curve, railData, woodSupports, trackLights };
+    return { curve, railData, woodSupports, trackLights, loopCables };
   }, [trackPoints, isLooped]);
   
   if (!curve || railData.length < 2) {
@@ -310,6 +333,41 @@ export function Track() {
                 <meshStandardMaterial color="#CD853F" />
               </mesh>
             )}
+          </group>
+        );
+      })}
+      
+      {/* Loop cables - thin steel cables connecting loop to ground */}
+      {showWoodSupports && loopCables.map((cable, i) => {
+        const { trackPos, groundPos } = cable;
+        const midY = (trackPos.y + groundPos.y) / 2;
+        const height = trackPos.y - groundPos.y;
+        
+        // Calculate angle for the cable
+        const dx = trackPos.x - groundPos.x;
+        const dz = trackPos.z - groundPos.z;
+        const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+        const cableAngle = Math.atan2(height, horizontalDist);
+        const yawAngle = Math.atan2(dx, dz);
+        
+        const cableLength = Math.sqrt(height * height + horizontalDist * horizontalDist);
+        
+        return (
+          <group key={`cable-${i}`}>
+            {/* Cable line */}
+            <Line
+              points={[
+                [trackPos.x, trackPos.y, trackPos.z],
+                [groundPos.x, groundPos.y, groundPos.z]
+              ]}
+              color="#444444"
+              lineWidth={2}
+            />
+            {/* Ground anchor */}
+            <mesh position={[groundPos.x, 0.1, groundPos.z]}>
+              <cylinderGeometry args={[0.3, 0.4, 0.2, 8]} />
+              <meshStandardMaterial color="#555555" metalness={0.8} roughness={0.3} />
+            </mesh>
           </group>
         );
       })}
