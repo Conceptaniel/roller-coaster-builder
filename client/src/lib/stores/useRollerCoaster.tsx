@@ -220,8 +220,9 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         const forwardOffset = Math.sin(theta) * loopRadius;
         const verticalOffset = (1 - Math.cos(theta)) * loopRadius;
         
-        // Gradual corkscrew: linear lateral offset
-        const lateralOffset = t * helixSeparation;
+        // Corkscrew that returns to center: 0 at start, peaks mid-loop, 0 at exit
+        // sin(theta/2) = 0 at theta=0, 1 at theta=π, 0 at theta=2π
+        const lateralOffset = Math.sin(theta * 0.5) * helixSeparation;
         
         loopPoints.push({
           id: `point-${++pointCounter}`,
