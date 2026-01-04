@@ -182,72 +182,30 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         });
       }
       
-      // Add exit easing points past theta=2π to prevent pinch at bottom
-      // These gradually flatten the curve as it returns to horizontal
-      const numEasePoints = 5;
-      const easeOutQuad = (x: number) => 1 - (1 - x) * (1 - x);
+      // Simple straight exit: just add forward-facing points at entry height
+      // No complex math - just like manually placed straight track
+      const loopExitPos = loopPoints[loopPoints.length - 1].position.clone();
+      const straightSpacing = 4;
+      const numStraightPoints = 3;
       
-      for (let i = 1; i <= numEasePoints; i++) {
-        const t = i / numEasePoints; // 0 to 1 through easing
-        const easedT = easeOutQuad(t);
-        
-        // Continue theta slightly past 2π with decaying amplitude
-        const theta = Math.PI * 2 + t * Math.PI * 0.3;
-        const decayFactor = 1 - easedT; // Decays from 1 to 0
-        
-        const forwardOffset = Math.sin(theta) * loopRadius * decayFactor;
-        const verticalOffset = (1 - Math.cos(theta)) * loopRadius * decayFactor;
-        
-        // Lateral stays at max, forward movement increases
-        const lateralOffset = helixSeparation;
-        const exitForward = easedT * 4; // Move forward as we exit
-        
-        loopPoints.push({
+      const straightExitPoints: TrackPoint[] = [];
+      for (let i = 1; i <= numStraightPoints; i++) {
+        straightExitPoints.push({
           id: `point-${++pointCounter}`,
           position: new THREE.Vector3(
-            entryPos.x + forward.x * (forwardOffset + exitForward) + right.x * lateralOffset,
-            entryPos.y + verticalOffset,
-            entryPos.z + forward.z * (forwardOffset + exitForward) + right.z * lateralOffset
+            loopExitPos.x + forward.x * straightSpacing * i,
+            entryPos.y, // Back to entry height
+            loopExitPos.z + forward.z * straightSpacing * i
           ),
-          tilt: 0,
-          loopMeta: {
-            entryPos: entryPos.clone(),
-            forward: forward.clone(),
-            up: up.clone(),
-            right: right.clone(),
-            radius: loopRadius,
-            theta: Math.PI * 2 // Keep orientation at 2π for exit
-          }
+          tilt: 0
         });
       }
       
-      // Simple linear interpolation - let Catmull-Rom handle the smoothing naturally
-      // Just like how manually placed points work
-      const transitionPoints: TrackPoint[] = [];
-      const loopExitPos = loopPoints[loopPoints.length - 1].position.clone();
-      
-      if (nextPoint) {
-        const nextPos = nextPoint.position.clone();
-        const numTransitionPoints = 4;
-        
-        // Simple evenly-spaced linear interpolation from loop exit to next point
-        for (let i = 1; i <= numTransitionPoints; i++) {
-          const t = i / (numTransitionPoints + 1);
-          const transPos = loopExitPos.clone().lerp(nextPos, t);
-          
-          transitionPoints.push({
-            id: `point-${++pointCounter}`,
-            position: transPos,
-            tilt: 0
-          });
-        }
-      }
-      
-      // Combine: original up to entry + loop + transitions + original remainder (unchanged)
+      // Combine: original up to entry + loop + straight exit + original remainder
       const newTrackPoints = [
         ...state.trackPoints.slice(0, pointIndex + 1),
         ...loopPoints,
-        ...transitionPoints,
+        ...straightExitPoints,
         ...state.trackPoints.slice(pointIndex + 1)
       ];
       
