@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import * as THREE from "three";
-import { LOOP_RADIUS, HELIX_SEPARATION, LOOP_POINTS_COUNT, EXIT_SEPARATION, FORWARD_SEPARATION, SCALE } from "@/lib/config/scale";
 
 export type CoasterMode = "build" | "ride" | "preview";
 
@@ -140,76 +139,14 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         forward.normalize();
       }
       
-      const loopRadius = LOOP_RADIUS;
-      const totalLoopPoints = LOOP_POINTS_COUNT;
+      const loopRadius = 8;
+      const totalLoopPoints = 20;
       const loopPoints: TrackPoint[] = [];
-      const helixSeparation = HELIX_SEPARATION;
+      const helixSeparation = 3.5; // Mild corkscrew separation
       
       // Compute right vector for corkscrew offset
       const up = new THREE.Vector3(0, 1, 0);
       const right = new THREE.Vector3().crossVectors(forward, up).normalize();
-      
-      // === APPROACH POINTS: Smooth entry into the loop ===
-      // Create an "entry anchor" ahead of entryPos that aligns with the loop's forward direction
-      const approachPoints: TrackPoint[] = [];
-      const prevPoint = pointIndex > 0 ? state.trackPoints[pointIndex - 1] : null;
-      const prevPrevPoint = pointIndex > 1 ? state.trackPoints[pointIndex - 2] : null;
-      
-      if (prevPoint) {
-        const prevPos = prevPoint.position.clone();
-        const approachLength = loopRadius * 0.8; // Length of approach curve
-        
-        // Direction from prevPrev to prev (legacy track direction)
-        let legacyDir: THREE.Vector3;
-        if (prevPrevPoint) {
-          legacyDir = prevPos.clone().sub(prevPrevPoint.position).normalize();
-        } else {
-          legacyDir = entryPos.clone().sub(prevPos).normalize();
-        }
-        legacyDir.y = 0;
-        legacyDir.normalize();
-        
-        // Entry tangent must match loop's forward direction
-        const entryTangent = forward.clone();
-        
-        // Create an entry anchor point that's slightly before the entry
-        // positioned to smoothly guide into the loop
-        const entryAnchor = entryPos.clone().sub(forward.clone().multiplyScalar(loopRadius * 0.3));
-        
-        // Hermite from prevPos to entryAnchor
-        const hermite = (t: number, p0: THREE.Vector3, t0: THREE.Vector3, p1: THREE.Vector3, t1: THREE.Vector3, scale: number): THREE.Vector3 => {
-          const t2 = t * t;
-          const t3 = t2 * t;
-          
-          const h00 = 2*t3 - 3*t2 + 1;
-          const h10 = t3 - 2*t2 + t;
-          const h01 = -2*t3 + 3*t2;
-          const h11 = t3 - t2;
-          
-          return new THREE.Vector3()
-            .addScaledVector(p0, h00)
-            .addScaledVector(t0, h10 * scale)
-            .addScaledVector(p1, h01)
-            .addScaledVector(t1, h11 * scale);
-        };
-        
-        const dist1 = prevPos.distanceTo(entryAnchor);
-        const dist2 = entryAnchor.distanceTo(entryPos);
-        
-        // First segment: prevPos to entryAnchor (align with legacy direction -> forward)
-        approachPoints.push({
-          id: `point-${++pointCounter}`,
-          position: hermite(0.5, prevPos, legacyDir, entryAnchor, forward, dist1 * 0.5),
-          tilt: 0
-        });
-        
-        // Second segment: entryAnchor to entryPos (both tangents are forward)
-        approachPoints.push({
-          id: `point-${++pointCounter}`,
-          position: hermite(0.5, entryAnchor, forward, entryPos, forward, dist2 * 0.5),
-          tilt: 0
-        });
-      }
       
       // Build helical loop with mild corkscrew
       // Lateral offset increases linearly throughout to separate entry from exit
@@ -220,10 +157,8 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         const forwardOffset = Math.sin(theta) * loopRadius;
         const verticalOffset = (1 - Math.cos(theta)) * loopRadius;
         
-        // Bump corkscrew: bulges out in the middle, returns to zero at exit
-        // sin²(πt) = 0 at t=0, peaks at t=0.5, returns to 0 at t=1, with zero derivative at both ends
-        const bump = Math.pow(Math.sin(Math.PI * t), 2);
-        const lateralOffset = bump * helixSeparation;
+        // Gradual corkscrew: linear lateral offset
+        const lateralOffset = t * helixSeparation;
         
         loopPoints.push({
           id: `point-${++pointCounter}`,
@@ -244,16 +179,42 @@ export const useRollerCoaster = create<RollerCoasterState>((set, get) => ({
         });
       }
       
-      // === EXIT: Loop returns to original centerline, no shifting needed ===
-      // The sin²(πt) bump ensures the loop exits at the same lateral position as entry
+      // Get the next point (unchanged) so we can rejoin it
+      const nextPoint = state.trackPoints[pointIndex + 1];
       
-      // Combine: all before entry + approach + entry + loop + original legacy points
+      // Loop exit position (last point of loop) - same as entry position
+      const loopExit = loopPoints[loopPoints.length - 1].position.clone();
+      
+      // Use same right vector from loop generation for transition separation
+      const exitSeparation = 3.0;
+      const forwardSeparation = 2.0; // Also push exit forward to prevent intersection
+      
+      // Offset the loop exit both forward and laterally to clear the entry track
+      const offsetLoopExit = loopExit.clone()
+        .add(forward.clone().multiplyScalar(forwardSeparation))
+        .add(right.clone().multiplyScalar(exitSeparation));
+      
+      // Simple transition from corkscrew exit to next point
+      const transitionPoints: TrackPoint[] = [];
+      
+      if (nextPoint) {
+        const nextPos = nextPoint.position.clone();
+        
+        // Single smooth transition point between loop exit and next point
+        const midPoint = loopExit.clone().lerp(nextPos, 0.5);
+        transitionPoints.push({
+          id: `point-${++pointCounter}`,
+          position: midPoint,
+          tilt: 0
+        });
+      }
+      
+      // Combine: original up to entry + loop + transitions + original remainder (unchanged)
       const newTrackPoints = [
-        ...state.trackPoints.slice(0, pointIndex), // All points before entry
-        ...approachPoints,                          // Smooth approach to entry
-        entryPoint,                                 // The entry point itself
-        ...loopPoints,                              // The loop (exits at original centerline)
-        ...state.trackPoints.slice(pointIndex + 1) // Original legacy points unchanged
+        ...state.trackPoints.slice(0, pointIndex + 1),
+        ...loopPoints,
+        ...transitionPoints,
+        ...state.trackPoints.slice(pointIndex + 1)
       ];
       
       return { trackPoints: newTrackPoints };

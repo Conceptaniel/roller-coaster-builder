@@ -59,27 +59,6 @@ Custom build script (`script/build.ts`) that:
 - Selectively bundles common dependencies to reduce cold start times
 - Outputs CommonJS for Node.js compatibility
 
-## Key Implementation Notes
-
-### Scale Configuration
-All geometric constants are centralized in `client/src/lib/config/scale.ts` with a master `SCALE` factor (default 0.5). This includes:
-- Loop geometry: LOOP_RADIUS, HELIX_SEPARATION, EXIT_SEPARATION, FORWARD_SEPARATION
-- Track elements: RAIL_OFFSET, TIE dimensions, support dimensions
-- Car and camera: CAR dimensions, WHEEL dimensions, CAMERA_HEIGHT
-- Sampling: SAMPLES_PER_POINT (reduced for performance)
-
-To resize the world, adjust the SCALE constant - all dependent values will update automatically.
-
-### Loop Orientation Fix (Critical)
-When rendering loops with corkscrew/helical geometry, the track orientation must use a **complete reference frame** from the ideal circular loop - including the TANGENT, not just the up/normal vectors. The helical spline tangent contains lateral torsion that causes visible twisting at quarter-points (θ=π/2 and θ=3π/2).
-
-Solution implemented in Track.tsx:
-- Loop points store metadata: entryPos, forward, up, right, radius, theta
-- For loop segments, compute reference tangent: `cos(θ)*forward + sin(θ)*up`
-- Compute up as inward radial: `-sin(θ)*forward + cos(θ)*up`
-- Normal is constant: `right` vector
-- All three vectors (tangent, up, normal) must come from reference frame, not the spline
-
 ## External Dependencies
 
 ### 3D Graphics

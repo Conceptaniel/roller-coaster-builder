@@ -3,7 +3,6 @@ import { ThreeEvent } from "@react-three/fiber";
 import { TransformControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { useRollerCoaster } from "@/lib/stores/useRollerCoaster";
-import { TRACK_POINT_RADIUS, TRANSFORM_CONTROL_SIZE, SCALE } from "@/lib/config/scale";
 
 interface TrackPointProps {
   id: string;
@@ -80,7 +79,7 @@ export function TrackPoint({ id, position, tilt, index }: TrackPointProps) {
         position={[position.x, position.y, position.z]}
         onClick={handleClick}
       >
-        <sphereGeometry args={[TRACK_POINT_RADIUS, 16, 16]} />
+        <sphereGeometry args={[0.5, 16, 16]} />
         <meshStandardMaterial
           color={isSelected ? "#ff6600" : "#4488ff"}
           emissive={isSelected ? "#ff3300" : "#000000"}
@@ -94,13 +93,13 @@ export function TrackPoint({ id, position, tilt, index }: TrackPointProps) {
             ref={transformRef}
             object={meshRef.current}
             mode="translate"
-            size={TRANSFORM_CONTROL_SIZE}
+            size={0.75}
             showX={true}
             showY={true}
             showZ={true}
           />
           
-          <Html position={[position.x, position.y + 1 * SCALE + 0.5, position.z]} center>
+          <Html position={[position.x, position.y + 2, position.z]} center>
             <div 
               className="bg-black/80 text-white p-2 rounded text-xs whitespace-nowrap"
               style={{ pointerEvents: 'auto' }}
