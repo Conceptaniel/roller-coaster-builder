@@ -83,7 +83,7 @@ export function RideCamera() {
       const energySpeed = Math.sqrt(2 * gravity * Math.max(0, heightDrop));
       
       // Higher minimum speed for smooth loops
-      const minSpeed = 4.0;
+      const minSpeed = 8.0;
       speed = Math.max(minSpeed, energySpeed) * rideSpeed;
     }
     
