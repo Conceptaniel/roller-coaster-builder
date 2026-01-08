@@ -322,9 +322,12 @@ export function Track() {
     return null;
   }
   
+  // Scale factor for track elements - smaller values = smaller track, allowing bigger coasters
+  const TRACK_SCALE = 0.6;
+  
   const leftRail: [number, number, number][] = [];
   const rightRail: [number, number, number][] = [];
-  const railOffset = 0.3;
+  const railOffset = 0.3 * TRACK_SCALE;
   
   for (let i = 0; i < railData.length; i++) {
     const { point, normal } = railData[i];
@@ -346,12 +349,12 @@ export function Track() {
       <Line
         points={leftRail}
         color="#ff4444"
-        lineWidth={4}
+        lineWidth={4 * TRACK_SCALE}
       />
       <Line
         points={rightRail}
         color="#ff4444"
-        lineWidth={4}
+        lineWidth={4 * TRACK_SCALE}
       />
       
       {railData.filter((_, i) => i % 2 === 0).map((data, i) => {
@@ -364,10 +367,10 @@ export function Track() {
         return (
           <mesh
             key={`tie-${i}`}
-            position={[point.x, point.y - up.y * 0.08, point.z]}
+            position={[point.x, point.y - up.y * 0.08 * TRACK_SCALE, point.z]}
             rotation={euler}
           >
-            <boxGeometry args={[1.0, 0.08, 0.12]} />
+            <boxGeometry args={[1.0 * TRACK_SCALE, 0.08 * TRACK_SCALE, 0.12 * TRACK_SCALE]} />
             <meshStandardMaterial color="#8B4513" />
           </mesh>
         );
@@ -378,7 +381,7 @@ export function Track() {
         const angle = Math.atan2(tangent.x, tangent.z);
         const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
         
-        const legInset = 0.15;
+        const legInset = 0.15 * TRACK_SCALE;
         const leftLegX = pos.x + normal.x * (railOffset - legInset);
         const leftLegZ = pos.z + normal.z * (railOffset - legInset);
         const rightLegX = pos.x - normal.x * (railOffset - legInset);
@@ -388,14 +391,18 @@ export function Track() {
         const crossLength = Math.sqrt(Math.pow(railOffset * 2, 2) + Math.pow(crossbraceHeight, 2));
         const crossAngle = Math.atan2(crossbraceHeight, railOffset * 2);
         
+        const legSize = 0.12 * TRACK_SCALE;
+        const braceSize = 0.08 * TRACK_SCALE;
+        const crossSize = 0.06 * TRACK_SCALE;
+        
         return (
           <group key={`wood-${i}`}>
             <mesh position={[leftLegX, height / 2, leftLegZ]}>
-              <boxGeometry args={[0.12, height, 0.12]} />
+              <boxGeometry args={[legSize, height, legSize]} />
               <meshStandardMaterial color="#8B5A2B" />
             </mesh>
             <mesh position={[rightLegX, height / 2, rightLegZ]}>
-              <boxGeometry args={[0.12, height, 0.12]} />
+              <boxGeometry args={[legSize, height, legSize]} />
               <meshStandardMaterial color="#8B5A2B" />
             </mesh>
             
@@ -405,14 +412,14 @@ export function Track() {
                   position={[pos.x, height * 0.3, pos.z]} 
                   rotation={[0, angle, 0]}
                 >
-                  <boxGeometry args={[0.08, 0.08, railOffset * 2.2]} />
+                  <boxGeometry args={[braceSize, braceSize, railOffset * 2.2]} />
                   <meshStandardMaterial color="#A0522D" />
                 </mesh>
                 <mesh 
                   position={[pos.x, height * 0.6, pos.z]} 
                   rotation={[0, angle, 0]}
                 >
-                  <boxGeometry args={[0.08, 0.08, railOffset * 2.2]} />
+                  <boxGeometry args={[braceSize, braceSize, railOffset * 2.2]} />
                   <meshStandardMaterial color="#A0522D" />
                 </mesh>
               </>
@@ -423,7 +430,7 @@ export function Track() {
                 position={[pos.x, height * 0.45, pos.z]} 
                 rotation={[crossAngle, angle, 0]}
               >
-                <boxGeometry args={[0.06, crossLength * 0.5, 0.06]} />
+                <boxGeometry args={[crossSize, crossLength * 0.5, crossSize]} />
                 <meshStandardMaterial color="#CD853F" />
               </mesh>
             )}
@@ -433,21 +440,21 @@ export function Track() {
       
       {isNightMode && trackLights.map((light, i) => {
         const { pos, normal } = light;
-        const leftX = pos.x + normal.x * 0.5;
-        const leftZ = pos.z + normal.z * 0.5;
-        const rightX = pos.x - normal.x * 0.5;
-        const rightZ = pos.z - normal.z * 0.5;
+        const leftX = pos.x + normal.x * 0.5 * TRACK_SCALE;
+        const leftZ = pos.z + normal.z * 0.5 * TRACK_SCALE;
+        const rightX = pos.x - normal.x * 0.5 * TRACK_SCALE;
+        const rightZ = pos.z - normal.z * 0.5 * TRACK_SCALE;
         const colors = ["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#FF00FF"];
         const color = colors[i % colors.length];
         
         return (
           <group key={`light-${i}`}>
             <mesh position={[leftX, pos.y + 0.1, leftZ]}>
-              <sphereGeometry args={[0.3, 6, 6]} />
+              <sphereGeometry args={[0.3 * TRACK_SCALE, 6, 6]} />
               <meshBasicMaterial color={color} />
             </mesh>
             <mesh position={[rightX, pos.y + 0.1, rightZ]}>
-              <sphereGeometry args={[0.3, 6, 6]} />
+              <sphereGeometry args={[0.3 * TRACK_SCALE, 6, 6]} />
               <meshBasicMaterial color={color} />
             </mesh>
           </group>

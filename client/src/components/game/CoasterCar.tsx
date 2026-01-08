@@ -303,7 +303,7 @@ export function CoasterCar() {
     const { point: position, tangent, up } = sample;
     
     meshRef.current.position.copy(position);
-    meshRef.current.position.addScaledVector(up, -0.3);
+    meshRef.current.position.addScaledVector(up, -0.18); // Scaled down offset (0.3 * 0.6)
     
     const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
     const matrix = new THREE.Matrix4().makeBasis(right, up, tangent);
@@ -314,8 +314,11 @@ export function CoasterCar() {
   
   if (!isRiding || mode !== "ride") return null;
   
+  // Scale factor to match the track size - smaller car for a smaller track
+  const CAR_SCALE = 0.6;
+  
   return (
-    <group ref={meshRef}>
+    <group ref={meshRef} scale={[CAR_SCALE, CAR_SCALE, CAR_SCALE]}>
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1, 0.5, 2]} />
         <meshStandardMaterial color="#ff0000" metalness={0.7} roughness={0.3} />
