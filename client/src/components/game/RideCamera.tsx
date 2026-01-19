@@ -121,6 +121,8 @@ export function RideCamera() {
   const maxHeightReached = useRef(0);
   const transportedUp = useRef(new THREE.Vector3(0, 1, 0));
   const lastProgress = useRef(0);
+  const mouseX = useRef(0);
+  const mouseY = useRef(0);
   
   const { sections, totalArcLength, firstPeakProgress } = useMemo(() => {
     if (trackPoints.length < 2) {
@@ -261,6 +263,18 @@ export function RideCamera() {
     }
   }, [isRiding]);
   
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (isRiding) {
+        mouseX.current = (event.clientX / window.innerWidth) * 2 - 1;
+        mouseY.current = -(event.clientY / window.innerHeight) * 2 + 1;
+      }
+    };
+    
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [isRiding]);
+  
   useFrame((_, delta) => {
     if (!isRiding || !curveRef.current || sections.length === 0) return;
     
@@ -319,9 +333,18 @@ export function RideCamera() {
     // Look further ahead and slightly down for better track visibility
     const lookDistance = 12;
     const lookDownOffset = -0.5; // Look slightly below horizon to see track ahead
-    const targetLookAt = position.clone()
+    let targetLookAt = position.clone()
       .add(tangent.clone().multiplyScalar(lookDistance))
       .add(baseUpVector.clone().multiplyScalar(lookDownOffset));
+    
+    // Add mouse look offset - allow looking around horizontally and vertically
+    const right = new THREE.Vector3().crossVectors(tangent, baseUpVector).normalize();
+    const mouseLookDistance = 8; // How far to look when using mouse
+    const mouseHorizontal = mouseX.current * mouseLookDistance;
+    const mouseVertical = mouseY.current * mouseLookDistance;
+    
+    targetLookAt.add(right.clone().multiplyScalar(mouseHorizontal));
+    targetLookAt.add(baseUpVector.clone().multiplyScalar(mouseVertical));
     
     previousCameraPos.current.lerp(targetCameraPos, 0.5);
     previousLookAt.current.lerp(targetLookAt, 0.5);

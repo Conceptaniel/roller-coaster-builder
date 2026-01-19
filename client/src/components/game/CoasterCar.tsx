@@ -182,7 +182,7 @@ function sampleHybridTrack(
 
 export function CoasterCar() {
   const meshRef = useRef<THREE.Group>(null);
-  const { trackPoints, loopSegments, rideProgress, isRiding, mode, isLooped } = useRollerCoaster();
+  const { trackPoints, loopSegments, rideProgress, isRiding, mode, isLooped, setRideProgress, rideSpeed } = useRollerCoaster();
   
   const sections = useMemo(() => {
     if (trackPoints.length < 2) return [];
@@ -291,6 +291,49 @@ export function CoasterCar() {
     return sections;
   }, [trackPoints, loopSegments, isLooped]);
   
+  // Physics state reference for realistic speed based on height
+  const physicsRef = useRef({ 
+    currentSpeed: 0, 
+    lastHeight: 0,
+    lastProgress: 0 
+  });
+  
+  const computeRealisticSpeed = (progress: number, currentHeight: number) => {
+    const physics = physicsRef.current;
+    const maxSpeed = 3.5; // Maximum speed in units/frame
+    const g = 0.98; // Gravity constant for realistic acceleration
+    const friction = 0.02; // Friction/air resistance on flats
+    const liftSpeed = 0.5; // Maximum climb speed on lift hill
+    
+    // Initial speed on lift hill
+    const isOnLift = progress < 0.08; // First 8% is lift
+    if (isOnLift) {
+      physics.currentSpeed = Math.min(liftSpeed, physics.currentSpeed + 0.05);
+    } else {
+      // Calculate height change
+      const heightDelta = physics.lastHeight - currentHeight;
+      
+      // Energy conservation: v² = v₀² + 2gh
+      const energyFromGravity = Math.sqrt(Math.max(0, physics.currentSpeed ** 2 + 2 * g * heightDelta));
+      
+      // Apply friction on flat/uphill sections
+      const angle = Math.atan2(physics.lastHeight - currentHeight, 1);
+      const frictionFactor = angle > 0 ? 1 - friction : 1 - friction * 0.5;
+      
+      physics.currentSpeed = Math.min(maxSpeed, energyFromGravity * frictionFactor);
+    }
+    
+    // Brake zones (last 10% of track)
+    if (progress > 0.9) {
+      physics.currentSpeed *= 0.96;
+    }
+    
+    physics.lastHeight = currentHeight;
+    physics.lastProgress = progress;
+    
+    return physics.currentSpeed;
+  };
+
   useFrame(() => {
     if (!meshRef.current || !isRiding) return;
     
@@ -301,6 +344,14 @@ export function CoasterCar() {
     if (!sample) return;
     
     const { point: position, tangent, up } = sample;
+    
+    // Update physics-based speed
+    const realisticSpeed = computeRealisticSpeed(rideProgress, position.y);
+    
+    // Update progress with realistic speed
+    const deltaProgress = realisticSpeed * 0.001; // Small delta for smooth animation
+    const newProgress = Math.min(rideProgress + deltaProgress * rideSpeed, 0.9999);
+    setRideProgress(newProgress);
     
     meshRef.current.position.copy(position);
     meshRef.current.position.addScaledVector(up, -0.18); // Scaled down offset (0.3 * 0.6)

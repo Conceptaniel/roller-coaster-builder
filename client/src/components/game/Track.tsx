@@ -292,7 +292,7 @@ export function Track() {
     }
     
     const woodSupports: { pos: THREE.Vector3; tangent: THREE.Vector3; height: number; tilt: number }[] = [];
-    const supportInterval = 3;
+    const supportInterval = 2; // Denser supports for Yukon Striker
     
     for (let i = 0; i < railData.length; i += supportInterval) {
       const { point, tangent, tilt } = railData[i];
@@ -378,100 +378,28 @@ export function Track() {
       
       {showWoodSupports && woodSupports.map((support, i) => {
         const { pos, tangent, height } = support;
-        const angle = Math.atan2(tangent.x, tangent.z);
         const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
         
         const legInset = 0.15 * TRACK_SCALE;
-        const leftLegX = pos.x + normal.x * (railOffset - legInset);
-        const leftLegZ = pos.z + normal.z * (railOffset - legInset);
-        const rightLegX = pos.x - normal.x * (railOffset - legInset);
-        const rightLegZ = pos.z - normal.z * (railOffset - legInset);
+        const centerX = pos.x;
+        const centerZ = pos.z;
         
-        const crossbraceHeight = height * 0.6;
-        const crossLength = Math.sqrt(Math.pow(railOffset * 2, 2) + Math.pow(crossbraceHeight, 2));
-        const crossAngle = Math.atan2(crossbraceHeight, railOffset * 2);
-        
-        const legSize = 0.12 * TRACK_SCALE;
-        const braceSize = 0.08 * TRACK_SCALE;
-        const crossSize = 0.06 * TRACK_SCALE;
+        // Single pole - steel tube
+        const poleRadius = 0.08 * TRACK_SCALE;
         
         return (
-          <group key={`wood-${i}`}>
-            <mesh position={[leftLegX, height / 2, leftLegZ]}>
-              <boxGeometry args={[legSize, height, legSize]} />
-              <meshStandardMaterial color="#8B5A2B" />
-            </mesh>
-            <mesh position={[rightLegX, height / 2, rightLegZ]}>
-              <boxGeometry args={[legSize, height, legSize]} />
-              <meshStandardMaterial color="#8B5A2B" />
+          <group key={`support-${i}`}>
+            {/* Single vertical support pole */}
+            <mesh position={[centerX, height / 2, centerZ]}>
+              <cylinderGeometry args={[poleRadius, poleRadius, height, 8]} />
+              <meshStandardMaterial color="#555555" metalness={0.8} roughness={0.2} />
             </mesh>
             
-            {height > 1.5 && (
-              <>
-                {/* Horizontal braces at multiple heights */}
-                <mesh 
-                  position={[pos.x, height * 0.2, pos.z]} 
-                  rotation={[0, angle, 0]}
-                >
-                  <boxGeometry args={[braceSize, braceSize, railOffset * 2.2]} />
-                  <meshStandardMaterial color="#A0522D" />
-                </mesh>
-                <mesh 
-                  position={[pos.x, height * 0.5, pos.z]} 
-                  rotation={[0, angle, 0]}
-                >
-                  <boxGeometry args={[braceSize, braceSize, railOffset * 2.2]} />
-                  <meshStandardMaterial color="#A0522D" />
-                </mesh>
-                <mesh 
-                  position={[pos.x, height * 0.8, pos.z]} 
-                  rotation={[0, angle, 0]}
-                >
-                  <boxGeometry args={[braceSize, braceSize, railOffset * 2.2]} />
-                  <meshStandardMaterial color="#A0522D" />
-                </mesh>
-              </>
-            )}
-            
-            {height > 2 && (
-              <>
-                {/* X-pattern diagonal cross braces */}
-                <mesh 
-                  position={[pos.x, height * 0.35, pos.z]} 
-                  rotation={[crossAngle, angle, 0]}
-                >
-                  <boxGeometry args={[crossSize, crossLength * 0.4, crossSize]} />
-                  <meshStandardMaterial color="#CD853F" />
-                </mesh>
-                <mesh 
-                  position={[pos.x, height * 0.35, pos.z]} 
-                  rotation={[-crossAngle, angle, 0]}
-                >
-                  <boxGeometry args={[crossSize, crossLength * 0.4, crossSize]} />
-                  <meshStandardMaterial color="#CD853F" />
-                </mesh>
-              </>
-            )}
-            
-            {height > 4 && (
-              <>
-                {/* Additional X-pattern for taller supports */}
-                <mesh 
-                  position={[pos.x, height * 0.65, pos.z]} 
-                  rotation={[crossAngle, angle, 0]}
-                >
-                  <boxGeometry args={[crossSize, crossLength * 0.4, crossSize]} />
-                  <meshStandardMaterial color="#CD853F" />
-                </mesh>
-                <mesh 
-                  position={[pos.x, height * 0.65, pos.z]} 
-                  rotation={[-crossAngle, angle, 0]}
-                >
-                  <boxGeometry args={[crossSize, crossLength * 0.4, crossSize]} />
-                  <meshStandardMaterial color="#CD853F" />
-                </mesh>
-              </>
-            )}
+            {/* Base connection plate */}
+            <mesh position={[centerX, 0.1, centerZ]}>
+              <cylinderGeometry args={[poleRadius * 3, poleRadius * 3, 0.15, 8]} />
+              <meshStandardMaterial color="#444444" metalness={0.85} roughness={0.15} />
+            </mesh>
           </group>
         );
       })}
@@ -498,6 +426,40 @@ export function Track() {
           </group>
         );
       })}
+      
+      {/* Brake Pads - render along the entire track with spacing */}
+      {railData.map((data, i) => {
+        // Render brake pads in last 20% of track for magnetic braking effect
+        const progress = i / railData.length;
+        if (progress < 0.80) return null;
+        
+        const { point, tangent, up } = data;
+        const right = new THREE.Vector3().crossVectors(tangent, up).normalize();
+        
+        return (
+          <group key={`brake-pad-${i}`}>
+            {/* Left brake pad */}
+            <mesh position={[
+              point.x + right.x * (railOffset + 0.08 * TRACK_SCALE),
+              point.y - up.y * 0.12 * TRACK_SCALE,
+              point.z + right.z * (railOffset + 0.08 * TRACK_SCALE)
+            ]}>
+              <boxGeometry args={[0.1 * TRACK_SCALE, 0.3 * TRACK_SCALE, 0.2 * TRACK_SCALE]} />
+              <meshStandardMaterial color="#2a2a2a" metalness={0.8} roughness={0.6} />
+            </mesh>
+            
+            {/* Right brake pad */}
+            <mesh position={[
+              point.x - right.x * (railOffset + 0.08 * TRACK_SCALE),
+              point.y - up.y * 0.12 * TRACK_SCALE,
+              point.z - right.z * (railOffset + 0.08 * TRACK_SCALE)
+            ]}>
+              <boxGeometry args={[0.1 * TRACK_SCALE, 0.3 * TRACK_SCALE, 0.2 * TRACK_SCALE]} />
+              <meshStandardMaterial color="#2a2a2a" metalness={0.8} roughness={0.6} />
+            </mesh>
+          </group>
+        );
+      }).filter(Boolean)}
     </group>
   );
 }
